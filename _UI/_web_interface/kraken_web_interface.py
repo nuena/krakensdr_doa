@@ -111,6 +111,7 @@ class webInterface():
         self.doa_results           = []
         self.doa_labels            = []
         self.doas                  = [] # Final measured DoAs [deg]
+        self.doa_confidences       = []
         self.compass_ofset         = 0
         self.DOA_res_fd            = open("_android_web/DOA_value.html","w+") #open("/ram/DOA_value.html","w+") # DOA estimation result file descriptor
 
@@ -578,13 +579,14 @@ def generate_config_page_layout(webInterface_inst):
         dcc.Dropdown(id='doa_fig_type',
                 options=[
                     {'label': 'Linear plot', 'value': 0},
-                    {'label': 'Polar plot',  'value': 1}                
+                    {'label': 'Polar plot' ,  'value': 1},
+                    {'label': 'Compass'    ,  'value': 2},
                     ],
             value=webInterface_inst._doa_fig_type, style={"display":"inline-block"},className="field-body"),
         html.Div("Compass ofset [deg]:", className="field-label"), 
         dcc.Input(id="compass_ofset", value=webInterface_inst.compass_ofset, type='number', debounce=False, className="field-body"),
 
-    ], className="card", style={"float":"left"})
+    ], className="card")
     
     #-----------------------------
     #  Squelch Configuration Card
@@ -737,27 +739,36 @@ def fetch_dsp_data(input_value, pathname):
                 webInterface_inst.doa_results = []
                 webInterface_inst.doa_labels  = []
                 webInterface_inst.doas        = [] 
+                webInterface_inst.doa_confidences = []
                 logging.debug("DoA estimation data fetched from signal processing que")                
             elif data_entry[0] == "DoA Bartlett":
                 webInterface_inst.doa_results.append(data_entry[1])
                 webInterface_inst.doa_labels.append(data_entry[0])
             elif data_entry[0] == "DoA Bartlett Max":
                 webInterface_inst.doas.append(data_entry[1])
+            elif data_entry[0] == "DoA Barlett confidence":
+                webInterface_inst.doa_confidences.append(data_entry[1])
             elif data_entry[0] == "DoA Capon":
                 webInterface_inst.doa_results.append(data_entry[1])
                 webInterface_inst.doa_labels.append(data_entry[0])
             elif data_entry[0] == "DoA Capon Max":
                 webInterface_inst.doas.append(data_entry[1])
+            elif data_entry[0] == "DoA Capon confidence":
+                webInterface_inst.doa_confidences.append(data_entry[1])
             elif data_entry[0] == "DoA MEM":
                 webInterface_inst.doa_results.append(data_entry[1])
                 webInterface_inst.doa_labels.append(data_entry[0])
             elif data_entry[0] == "DoA MEM Max":
                 webInterface_inst.doas.append(data_entry[1])
+            elif data_entry[0] == "DoA MEM confidence":
+                webInterface_inst.doa_confidences.append(data_entry[1])
             elif data_entry[0] == "DoA MUSIC":
                 webInterface_inst.doa_results.append(data_entry[1])
                 webInterface_inst.doa_labels.append(data_entry[0])
             elif data_entry[0] == "DoA MUSIC Max":
                 webInterface_inst.doas.append(data_entry[1])
+            elif data_entry[0] == "DoA MUSIC confidence":
+                webInterface_inst.doa_confidences.append(data_entry[1])
             else:                
                 logging.warning("Unknown data entry: {:s}".format(data_entry[0]))
         
@@ -770,9 +781,9 @@ def fetch_dsp_data(input_value, pathname):
     # External interface
     if doa_update_flag:
         DOA_str = str(int(webInterface_inst.doas[0]))
-        confidence_sum  = 0
-        max_power_level = 0
-        html_str = "<DATA>\n<DOA>"+DOA_str+"</DOA>\n<CONF>"+str(int(confidence_sum))+"</CONF>\n<PWR>"+str(np.maximum(0, max_power_level))+"</PWR>\n</DATA>"
+        confidence  = np.max(webInterface_inst.doa_confidences)
+        max_power_level = webInterface_inst.max_amplitude
+        html_str = "<DATA>\n<DOA>"+DOA_str+"</DOA>\n<CONF>"+str(int(confidence))+"</CONF>\n<PWR>"+str(np.maximum(0, max_power_level))+"</PWR>\n</DATA>"
         webInterface_inst.DOA_res_fd.seek(0)
         webInterface_inst.DOA_res_fd.write(html_str)
         webInterface_inst.DOA_res_fd.truncate()
@@ -968,29 +979,24 @@ def plot_doa(doa_update_flag):
                             showline=True)
         # --- Polar plot ---
         elif webInterface_inst._doa_fig_type == 1:
-            thetas_compass = webInterface_inst.doa_thetas
-            #thetas_compass*=-1
-            thetas_compass += webInterface_inst.compass_ofset
-            if max(webInterface_inst.doa_thetas) != 360: # ULA                
+            if webInterface_inst.module_signal_processor.DOA_ant_alignment == "ULA":           
                 fig.update_layout(polar = dict(sector = [0, 180], 
                                                radialaxis_tickfont_size = figure_font_size,
-                                               angularaxis = dict(rotation=90+webInterface_inst.compass_ofset,
-                                                                  direction="clockwise",
+                                               angularaxis = dict(rotation=90,
                                                                   tickfont_size = figure_font_size
                                                                   )
                                                 )
                                  )                
             else: #UCA                
                 fig.update_layout(polar = dict(radialaxis_tickfont_size = figure_font_size,
-                                               angularaxis = dict(rotation=90+webInterface_inst.compass_ofset, 
-                                                                  direction="clockwise",
+                                               angularaxis = dict(rotation=90,                                                                   
                                                                   tickfont_size = figure_font_size)                                               
                                                )
                                  )           
 
             for i, doa_result in enumerate(webInterface_inst.doa_results):
-                label = webInterface_inst.doa_labels[i]+": "+str(webInterface_inst.doas[i]*1+webInterface_inst.compass_ofset)+"°"
-                fig.add_trace(go.Scatterpolar(theta=thetas_compass, 
+                label = webInterface_inst.doa_labels[i]+": "+str(webInterface_inst.doas[i])+"°"
+                fig.add_trace(go.Scatterpolar(theta=webInterface_inst.doa_thetas, 
                                             r=doa_result,
                                             name=label,
                                             line = dict(color = doa_trace_colors[webInterface_inst.doa_labels[i]]),
@@ -998,14 +1004,61 @@ def plot_doa(doa_update_flag):
                                             ))
                 fig.add_trace(go.Scatterpolar(
                                                 r = [0,min(doa_result)],
-                                                theta = [webInterface_inst.doas[i]*1+webInterface_inst.compass_ofset,
-                                                         webInterface_inst.doas[i]*1+webInterface_inst.compass_ofset],
+                                                theta = [webInterface_inst.doas[i],webInterface_inst.doas[i]],
                                                 mode = 'lines',
                                                 showlegend=False,                                                      
                                                 line = dict(
                                                     color = doa_trace_colors[webInterface_inst.doa_labels[i]],
                                                     dash='dash'
                                                 )))
+            # --- Compass  ---
+        elif webInterface_inst._doa_fig_type == 2 :
+            #thetas_compass = webInterface_inst.doa_thetas[::-1]            
+            #thetas_compass += webInterface_inst.compass_ofset
+            if webInterface_inst.module_signal_processor.DOA_ant_alignment == "ULA":             
+                fig.update_layout(polar = dict(sector = [0, 180], 
+                                            radialaxis_tickfont_size = figure_font_size,
+                                            angularaxis = dict(rotation=90+webInterface_inst.compass_ofset,
+                                                                direction="clockwise",
+                                                                tickfont_size = figure_font_size
+                                                                )
+                                                )
+                                )                
+            else: #UCA                
+                fig.update_layout(polar = dict(radialaxis_tickfont_size = figure_font_size,
+                                            angularaxis = dict(rotation=90+webInterface_inst.compass_ofset, 
+                                                                direction="clockwise",
+                                                                tickfont_size = figure_font_size)                                               
+                                            )
+                                )           
+
+            for i, doa_result in enumerate(webInterface_inst.doa_results):                 
+                if webInterface_inst.module_signal_processor.DOA_ant_alignment == "ULA":
+                    doa_compass = 0-webInterface_inst.doas[i]+webInterface_inst.compass_ofset
+                    
+                else:
+                    doa_compass = (360-webInterface_inst.doas[i]+webInterface_inst.compass_ofset)%360
+                label = webInterface_inst.doa_labels[i]+": "+str(doa_compass)+"°"           
+                """
+                fig.add_trace(go.Scatterpolar(theta=thetas_compass, 
+                                            r=doa_result,
+                                            name=label,
+                                            line = dict(color = doa_trace_colors[webInterface_inst.doa_labels[i]]),
+                                            fill= 'toself'
+                                            ))
+                """
+                fig.add_trace(go.Scatterpolar(
+                                                r = [0,min(doa_result)],
+                                                theta = [doa_compass,
+                                                         doa_compass],
+                                                mode = 'lines',
+                                                name = label,
+                                                showlegend=True,                                                      
+                                                line = dict(
+                                                    color = doa_trace_colors[webInterface_inst.doa_labels[i]],
+                                                    dash='dash'
+                                                )))
+
         return fig
 
     
@@ -1187,8 +1240,12 @@ def reconfig_daq_chain(input_value,
     daq_stop_script.wait()
     logging.debug("DAQ Subsystem restarted")
       
+    os.chdir(root_path)
 
-    os.chdir(current_path)
+    # Reinitialize receiver data interface
+    if webInterface_inst.module_receiver.init_data_iface() == -1:
+        logging.critical("Failed to restart the DAQ data interface")
+        return -1
 
     # Restart signal processing
     webInterface_inst.start_processing()
