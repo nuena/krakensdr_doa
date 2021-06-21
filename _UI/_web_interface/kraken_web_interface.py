@@ -63,7 +63,7 @@ class webInterface():
         #############################################
 
         # Web interface internal 
-        self.page_update_rate = 1     
+        self.page_update_rate = 1
         self._avg_win_size = 10
         self._update_rate_arr = None
         self._doa_method   = 3

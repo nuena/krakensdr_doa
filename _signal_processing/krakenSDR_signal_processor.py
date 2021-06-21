@@ -47,6 +47,7 @@ class SignalProcessor(threading.Thread):
         """        
         super(SignalProcessor, self).__init__()
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
 
         self.module_receiver = module_receiver
         self.data_que = data_que
@@ -64,7 +65,7 @@ class SignalProcessor(threading.Thread):
         self.raw_signal_amplitude = np.empty(0)
         self.filt_signal = np.empty(0)
         self.squelch_mask = np.empty(0)
-                
+
         # DOA processing options
         self.en_DOA_Bartlett = False
         self.en_DOA_Capon    = False
@@ -74,15 +75,15 @@ class SignalProcessor(threading.Thread):
         self.DOA_offset      = 0
         self.DOA_inter_elem_space = 0.5
         self.DOA_ant_alignment    = "ULA"
-            
-        # Processing parameters        
+
+        # Processing parameters
         self.spectrum_window_size = 1024
         self.spectrum_window = "hann"#"blackmanharris"
         self.run_processing = False
-        
+
         self.fs = 1.024 * 10**6  # Update from header
         self.channel_number = 4  # Update from header
-        
+
         # Result vectors
         self.DOA_Bartlett_res = np.ones(181)
         self.DOA_Capon_res = np.ones(181)
@@ -92,7 +93,7 @@ class SignalProcessor(threading.Thread):
 
     def run(self):
         """
-            Main processing thread        
+            Main processing thread
         """
         while True:
             time.sleep(1)
@@ -105,6 +106,10 @@ class SignalProcessor(threading.Thread):
                 self.module_receiver.get_iq_online()
                 # Normal data frame or cal frame ?
                 en_proc = self.module_receiver.iq_header.frame_type == self.module_receiver.iq_header.FRAME_TYPE_DATA
+                step_time_end = time.time()
+                self.logger.debug("Received packet, took {:.5f} ms".format(step_time_end - start_time))
+                self.logger.debug(np.asarray(self.module_receiver.iq_samples).shape)
+                step_time_begin = time.time()
                 """
                     You can enable here to process other frame types (such as call type frames)
                 """
@@ -120,8 +125,10 @@ class SignalProcessor(threading.Thread):
                 que_data_packet.append(['iq_header',self.module_receiver.iq_header])
                 que_data_packet.append(['max_amplitude',max_amplitude])
                 que_data_packet.append(['avg_powers',avg_powers])
-                self.logger.debug("IQ header has been put into the data que entity")
-                            
+                step_time_end = time.time()
+                self.logger.debug("IQ header has been put into the data que entity. Step took {:.5f} m".format(step_time_end - step_time_begin))
+                step_time_begin = time.time()
+
                 # Configure processing parameteres based on the settings of the DAQ chain
                 if self.first_frame:
                     self.fs = self.module_receiver.iq_header.sampling_freq
@@ -193,6 +200,8 @@ class SignalProcessor(threading.Thread):
 
                     #-----> DoA ESIMATION <----- 
                     if self.en_DOA_estimation and self.data_ready:
+                        step_time_begin = time.time()
+                        self.logger.debug("Calculating DOA for packet")
                         self.estimate_DOA()                        
                         que_data_packet.append(['doa_thetas', self.DOA_theta])
                         if self.en_DOA_Bartlett:
@@ -219,7 +228,9 @@ class SignalProcessor(threading.Thread):
                             que_data_packet.append(['DoA MUSIC', doa_result_log])
                             que_data_packet.append(['DoA MUSIC Max', theta_0])
                             que_data_packet.append(['DoA MUSIC confidence', calculate_doa_papr(self.DOA_MUSIC_res)])
-                        
+
+                        step_time_end = time.time()
+                        self.logger.debug("Calculating DOAs took {:.5f} ms".format(step_time_end - step_time_begin))
                         
                     
                     # Record IQ samples
@@ -229,7 +240,9 @@ class SignalProcessor(threading.Thread):
 
                 stop_time = time.time()
                 que_data_packet.append(['update_rate', stop_time-start_time])
+                self.logger.debug("Time spent in processing is {}".format(stop_time - start_time))
                 self.data_que.put(que_data_packet)
+                self.logger.debug("Time spent putting data in queue: {}".format(time.time()-stop_time))
 
     def estimate_DOA(self):
         """
