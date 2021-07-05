@@ -79,12 +79,16 @@ class webInterface():
         self.sp_data_que = queue.Queue(1) # Que to communicate with the signal processing module
         self.rx_data_que = queue.Queue(1) # Que to communicate with the receiver modules
 
+        self.logger.debug("Queues created")
+
         # Instantiate and configure Kraken SDR modules
         self.module_receiver = ReceiverRTLSDR(data_que=self.rx_data_que, data_interface=settings.data_interface, logging_level=settings.logging_level*10)
         self.module_receiver.daq_center_freq   = settings.center_freq*10**6
         self.module_receiver.daq_rx_gain       = settings.uniform_gain
         self.module_receiver.daq_squelch_th_dB = settings.squelch_threshold_dB
         self.module_receiver.rec_ip_addr       = settings.default_ip
+
+        self.logger.debug("Receiver instanciated")
 
         self.module_signal_processor = SignalProcessor(data_que=self.sp_data_que, module_receiver=self.module_receiver)
         self.module_signal_processor.en_spectrum          = settings.en_spectrum
@@ -95,6 +99,8 @@ class webInterface():
         self.module_signal_processor.en_squelch           = settings.en_squelch
         self.config_doa_in_signal_processor()
         self.module_signal_processor.start()
+
+        self.logger.debug("Signal proc started")
 
         #############################################
         #       UI Status and Config variables      #
@@ -117,7 +123,9 @@ class webInterface():
         self.daq_fs                = "-"
         self.daq_cpi               = "-"
         self.daq_if_gains          ="[,,,,]"
-        self.en_advanced_daq_cfg   = settings.en_advanced_daq_cfg 
+        self.en_advanced_daq_cfg   = settings.en_advanced_daq_cfg
+
+        self.logger.debug("DAQ subsystem parameters set")
 
         # DSP Processing Parameters and Results  
         self.spectrum              = None
