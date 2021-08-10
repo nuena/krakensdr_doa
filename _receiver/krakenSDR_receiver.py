@@ -20,7 +20,7 @@
 # -*- coding: utf-8 -*-
 
 # Import built-in modules
-import sys
+import sys, os
 import time
 from struct import pack, unpack
 from scipy import signal
@@ -86,11 +86,14 @@ class ReceiverRTLSDR():
     def init_data_iface(self):
         if self.data_interface == "shmem":
             # Open shared memory interface to capture the DAQ firmware output
+            print("Trying to open file " + os.path.abspath("../heimdall_daq_fw/Firmware/_data_control/delay_sync_iq"))
             self.in_shmem_iface = inShmemIface("delay_sync_iq", "../heimdall_daq_fw/Firmware/_data_control/")
             if not self.in_shmem_iface.init_ok:
                 self.logger.critical("Shared memory initialization failed")
                 self.in_shmem_iface.destory_sm_buffer()
                 return -1
+            else:
+                self.logger.info("Shared memory initialization successfull")
         return 0
 
             

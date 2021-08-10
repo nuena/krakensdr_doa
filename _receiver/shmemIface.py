@@ -139,6 +139,7 @@ class inShmemIface():
         self.init_ok = True        
         logging.basicConfig(level=logging.INFO) 
         self.logger = logging.getLogger(__name__)
+        self.logger.info("Trying to initialize shared memory interface")
         self.drop_mode = False
         
         self.shmem_name = shmem_name
@@ -147,7 +148,8 @@ class inShmemIface():
         self.buffers = []        
         try:
             self.fw_ctr_fifo = os.open(ctr_fifo_path+'fw_'+shmem_name, os.O_RDONLY)
-            self.bw_ctr_fifo = os.open(ctr_fifo_path+'bw_'+shmem_name, os.O_WRONLY)                         
+            self.bw_ctr_fifo = os.open(ctr_fifo_path+'bw_'+shmem_name, os.O_WRONLY)
+            self.logger.info("Opened both pipes")
         except OSError as err:
             self.logger.critical("OS error: {0}".format(err))
             self.logger.critical("Failed to open control fifos")
