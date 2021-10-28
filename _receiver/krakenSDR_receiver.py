@@ -48,7 +48,7 @@ class ReceiverRTLSDR():
             :type : data_interface: string
         """       
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging_level)
+        self.logger.setLevel(logging_level*10)
 
         # DAQ parameters
         # These values are used by default to configure the DAQ through the configuration interface

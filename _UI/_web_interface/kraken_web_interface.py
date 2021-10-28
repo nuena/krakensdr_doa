@@ -62,7 +62,9 @@ class webInterface():
         
         logging.basicConfig(level=settings.logging_level*10)
         self.logger = logging.getLogger(__name__)        
-        self.logger.setLevel(settings.logging_level*10)
+        #self.logger.setLevel(settings.logging_level*10)
+        self.logger.setLevel(10)
+        self.logger.warning("Overriding log level to 10!")
         self.logger.info("Inititalizing web interface ")
 
         #############################################
@@ -70,7 +72,7 @@ class webInterface():
         #############################################
 
         # Web interface internal 
-        self.page_update_rate = 1     
+        self.page_update_rate = 1
         self._avg_win_size = 10
         self._update_rate_arr = None
         self._doa_method   = settings.doa_method_dict[settings.doa_method]
@@ -397,7 +399,7 @@ app.layout = html.Div([
 
     dcc.Interval(
         id='interval-component',
-        interval=500, # in milliseconds
+        interval=10, # in milliseconds
         n_intervals=0
     ),
     html.Div(id="placeholder_start"          , style={"display":"none"}),
@@ -774,11 +776,13 @@ def generate_doa_page_layout(webInterface_inst):
     Input(component_id ="interval-component"           , component_property='n_intervals'),
     State(component_id ="url"                          , component_property='pathname')
 )
-def fetch_dsp_data(input_value, pathname):    
-    daq_status_update_flag = 0    
+def fetch_dsp_data(input_value, pathname):
+    daq_status_update_flag = 0
     spectrum_update_flag   = 0
     doa_update_flag        = 0
     freq_update            = no_update
+
+    step_time = time.time()
     #############################################
     #      Fetch new data from back-end ques    #
     #############################################        
@@ -800,6 +804,9 @@ def fetch_dsp_data(input_value, pathname):
         logging.debug("Receiver module que is empty")
     else:
         pass
+
+    logging.debug("[Timing] First try statement took %s seconds", time.time() - step_time)
+    step_time = time.time()
         # Handle task here and call q.task_done()    
     if webInterface_inst.daq_restart: # Set by the restarting script
         daq_status_update_flag = 1          
@@ -846,7 +853,8 @@ def fetch_dsp_data(input_value, pathname):
             elif data_entry[0] == "update_rate":
                 webInterface_inst.daq_update_rate = data_entry[1]
                 # Set absoluth minimum
-                if webInterface_inst.daq_update_rate < 0.1: webInterface_inst.daq_update_rate = 0.1
+                if webInterface_inst.daq_update_rate < 0.1:
+                    webInterface_inst.daq_update_rate = 0.1
                 if webInterface_inst._update_rate_arr is None:
                     webInterface_inst._update_rate_arr = np.ones(webInterface_inst._avg_win_size)*webInterface_inst.daq_update_rate
                 webInterface_inst._update_rate_arr[0:webInterface_inst._avg_win_size-2] = \
@@ -910,8 +918,13 @@ def fetch_dsp_data(input_value, pathname):
     else:
         pass
         # Handle task here and call q.task_done()
+
+    logging.debug("[Timing] Second try statement took %s seconds", time.time() - step_time)
+    step_time = time.time()
     # External interface
     if doa_update_flag:
+        logging.warning("Output to HTML disabled!")
+        """
         DOA_str = str(int(webInterface_inst.doas[0]))
         confidence_str  = "{:.2f}".format(np.max(webInterface_inst.doa_confidences))
         max_power_level_str = "{:.1f}".format((np.maximum(-100, webInterface_inst.max_amplitude)))
@@ -919,7 +932,8 @@ def fetch_dsp_data(input_value, pathname):
         webInterface_inst.DOA_res_fd.seek(0)
         webInterface_inst.DOA_res_fd.write(html_str)
         webInterface_inst.DOA_res_fd.truncate()
-        logging.debug("DoA results writen: {:s}".format(html_str))    
+        logging.debug("DoA results writen: {:s}".format(html_str))
+        """
 
     if (pathname == "/config" or pathname=="/") and daq_status_update_flag:        
         return webInterface_inst.page_update_rate*1000, 1, no_update, no_update, freq_update
@@ -1056,6 +1070,8 @@ def update_daq_status(input_value):
 )
 def plot_spectrum(spectrum_update_flag):
     fig = go.Figure(layout=fig_layout)
+    logging.warning("Plot Spectrum is deactivated for performance mesasures!")  # Todo: Reenable!!
+    return fig
     if webInterface_inst.spectrum is not None:
         # Plot traces
         freqs = webInterface_inst.spectrum[0,:]    
@@ -1090,6 +1106,8 @@ def plot_spectrum(spectrum_update_flag):
 )
 def plot_doa(doa_update_flag):
     fig = go.Figure(layout=fig_layout)
+    logging.warning("Plot DOA is deactivated for performance mesasures!")  # Todo: Reenable!!
+    return fig
     
     if webInterface_inst.doa_thetas is not None:
         # --- Linear plot ---
